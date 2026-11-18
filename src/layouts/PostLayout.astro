@@ -1,0 +1,294 @@
+---
+import type { MarkdownHeading } from 'astro';
+import { Image } from 'astro:assets';
+import FormattedDate from '../components/FormattedDate.astro';
+import Icon from '../components/Icon.astro';
+import { type Post, postUrl, readingTime, tagSlug } from '../utils/posts';
+import BaseLayout from './BaseLayout.astro';
+
+interface Props {
+	post: Post;
+	headings: MarkdownHeading[];
+	prev?: Post;
+	next?: Post;
+}
+
+const { post, headings, prev, next } = Astro.props;
+const { title, description, pubDate, updatedDate, tags, cover, coverAlt, draft } = post.data;
+const toc = headings.filter((h) => h.depth === 2);
+---
+
+<BaseLayout
+	width="narrow"
+	title={title}
+	description={description}
+	image={cover?.src}
+	type="article"
+	publishedTime={pubDate}
+	modifiedTime={updatedDate}
+	noindex={draft}
+>
+	<div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+	<header class="tile hero pop">
+		<div class="top">
+			<a class="chip back" href="/log/"><Icon name="arrowLeft" size={14} /> Log</a>
+			{
+				tags.map((tag) => (
+					<a class="chip" href={`/log/?topic=${encodeURIComponent(tagSlug(tag))}`}>
+						#{tag}
+					</a>
+				))
+			}
+		</div>
+		{draft && <p class="label draft">Draft — not included in production builds</p>}
+		<h1 class="display title">{title}</h1>
+		<p class="lede">{description}</p>
+		<p class="label meta">
+			<FormattedDate date={pubDate} />
+			<span>· {readingTime(post.body)} min read</span>
+			{
+				updatedDate && (
+					<span>
+						· updated <FormattedDate date={updatedDate} />
+					</span>
+				)
+			}
+		</p>
+		{
+			toc.length >= 3 && (
+				<details class="jump">
+					<summary class="chip">Jump to section</summary>
+					<ol>
+						{toc.map((h) => (
+							<li>
+								<a href={`#${h.slug}`}>{h.text}</a>
+							</li>
+						))}
+					</ol>
+				</details>
+			)
+		}
+	</header>
+
+	{
+		cover && (
+			<Image
+				class="cover pop"
+				src={cover}
+				alt={coverAlt}
+				widths={[720, 1440]}
+				sizes="(max-width: 800px) 100vw, 768px"
+				loading="eager"
+			/>
+		)
+	}
+
+	<article class="tile body pop" style="--i: 1">
+		<div class="prose">
+			<slot />
+		</div>
+	</article>
+
+	{
+		(prev || next) && (
+			<nav class="post-nav" aria-label="More entries">
+				{prev ? (
+					<a class="tile hoverable" href={postUrl(prev)} rel="prev">
+						<span class="label">← Older entry</span>
+						<span class="t">{prev.data.title}</span>
+					</a>
+				) : (
+					<span />
+				)}
+				{next ? (
+					<a class="tile hoverable next" href={postUrl(next)} rel="next">
+						<span class="label">Newer entry →</span>
+						<span class="t">{next.data.title}</span>
+					</a>
+				) : (
+					<span />
+				)}
+			</nav>
+		)
+	}
+</BaseLayout>
+
+<style>
+	/* Reading progress bar across the top of the screen. */
+	.progress {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 40;
+		height: 4px;
+	}
+	.progress span {
+		display: block;
+		height: 100%;
+		width: 100%;
+		background: var(--grad);
+		box-shadow: 0 0 12px rgba(255, 62, 165, 0.6);
+		transform: scaleX(0);
+		transform-origin: left;
+	}
+
+	.hero {
+		padding: 2rem;
+		margin-bottom: 1rem;
+	}
+	.top {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		margin-bottom: 1.5rem;
+	}
+	.back {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--on-accent);
+	}
+	.back:hover {
+		color: var(--on-accent);
+		filter: brightness(1.1);
+	}
+	.draft {
+		color: var(--accent-3);
+	}
+	.title {
+		font-size: clamp(2rem, 6vw, 3.4rem);
+		line-height: 1.05;
+		overflow-wrap: anywhere;
+	}
+	.lede {
+		margin: 1rem 0 1.25rem;
+		font-size: 1.15rem;
+		color: var(--fg-soft);
+	}
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0;
+	}
+	.jump {
+		margin-top: 1.25rem;
+	}
+	.jump summary {
+		list-style: none;
+		width: fit-content;
+	}
+	.jump summary::-webkit-details-marker {
+		display: none;
+	}
+	.jump ol {
+		margin: 0.75rem 0 0;
+		padding-left: 1.25rem;
+	}
+	.jump li::marker {
+		color: var(--accent);
+		font-family: var(--font-mono);
+	}
+	.jump a {
+		color: var(--fg-soft);
+		text-decoration: none;
+	}
+	.jump a:hover {
+		color: var(--accent);
+	}
+
+	.cover {
+		display: block;
+		width: 100%;
+		height: auto;
+		margin-bottom: 1rem;
+		border-radius: var(--radius);
+	}
+	.body {
+		padding: 2.25rem 2.25rem 2.5rem;
+	}
+
+	.post-nav {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+	.post-nav a {
+		display: flex;
+		flex-direction: column;
+		text-decoration: none;
+	}
+	.post-nav .label {
+		margin-bottom: 0.35rem;
+	}
+	.post-nav .next {
+		text-align: right;
+	}
+	.post-nav .t {
+		color: var(--fg);
+		font-weight: 800;
+	}
+
+	@media (max-width: 600px) {
+		.hero,
+		.body {
+			padding: 1.4rem;
+		}
+		.post-nav {
+			grid-template-columns: 1fr;
+		}
+		.post-nav .next {
+			text-align: left;
+		}
+	}
+</style>
+
+<script>
+	// Reading progress.
+	const bar = document.getElementById('progress-bar')!;
+	let ticking = false;
+	function update() {
+		ticking = false;
+		const max = document.documentElement.scrollHeight - innerHeight;
+		bar.style.transform = `scaleX(${max > 0 ? Math.min(1, scrollY / max) : 1})`;
+	}
+	window.addEventListener(
+		'scroll',
+		() => {
+			if (!ticking) {
+				ticking = true;
+				requestAnimationFrame(update);
+			}
+		},
+		{ passive: true },
+	);
+	window.addEventListener('resize', update);
+	update();
+
+	// Copy buttons on code blocks.
+	document.querySelectorAll<HTMLPreElement>('.prose pre').forEach((pre) => {
+		const wrapper = document.createElement('div');
+		wrapper.className = 'code-block';
+		pre.parentNode?.insertBefore(wrapper, pre);
+		wrapper.appendChild(pre);
+
+		const button = document.createElement('button');
+		button.type = 'button';
+		button.className = 'copy-btn';
+		button.textContent = 'COPY';
+		button.setAttribute('aria-label', 'Copy code to clipboard');
+		button.addEventListener('click', async () => {
+			const code = pre.querySelector('code')?.innerText ?? pre.innerText;
+			try {
+				await navigator.clipboard.writeText(code);
+				button.textContent = 'COPIED';
+			} catch {
+				button.textContent = 'FAILED';
+			}
+			setTimeout(() => (button.textContent = 'COPY'), 1500);
+		});
+		wrapper.appendChild(button);
+	});
+</script>

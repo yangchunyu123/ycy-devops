@@ -1,0 +1,188 @@
+---
+import Icon from '../../components/Icon.astro';
+import PostCard from '../../components/PostCard.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getPosts, getTags } from '../../utils/posts';
+
+// All entries on one page; search and topic filtering happen in the browser.
+const posts = await getPosts();
+const topics = getTags(posts);
+---
+
+<BaseLayout title="Log" description="Notes, how-tos and experiments — searchable and filterable by topic.">
+	<header class="tile head pop">
+		<p class="label">The log</p>
+		<h1 class="display title">
+			Log<span class="gradient-text">.</span>
+		</h1>
+		<p class="sub">
+			{posts.length} {posts.length === 1 ? 'entry' : 'entries'} — notes, how-tos and experiments.
+		</p>
+
+		{
+			posts.length > 0 && (
+				<div class="controls">
+					<label class="search">
+						<Icon name="search" size={18} />
+						<span class="sr-only">Search the log</span>
+						<input id="log-q" type="search" placeholder="Search the log…" autocomplete="off" />
+					</label>
+					{topics.length > 0 && (
+						<div class="chips" role="group" aria-label="Filter by topic">
+							<button class="chip" type="button" data-topic="" aria-pressed="true">
+								all
+							</button>
+							{topics.map((t) => (
+								<button class="chip" type="button" data-topic={t.slug} aria-pressed="false">
+									#{t.name} <span class="n">{t.count}</span>
+								</button>
+							))}
+						</div>
+					)}
+				</div>
+			)
+		}
+	</header>
+
+	{
+		posts.length === 0 ? (
+			<div class="tile empty pop" style="--i: 1">
+				<p class="label">Status</p>
+				<p>The log is empty — the first entry is on its way.</p>
+			</div>
+		) : (
+			<>
+				<p id="log-status" class="label status" aria-live="polite" />
+				<div class="cards">
+					{posts.map((post, i) => (
+						<PostCard post={post} index={i + 1} />
+					))}
+				</div>
+				<p id="log-none" class="tile empty" hidden>
+					No entries match. Try another word or topic.
+				</p>
+			</>
+		)
+	}
+</BaseLayout>
+
+<style>
+	.head {
+		padding: 2rem;
+		margin-bottom: 1rem;
+	}
+	.title {
+		font-size: clamp(3rem, 9vw, 5.5rem);
+	}
+	.sub {
+		margin: 0.75rem 0 0;
+		color: var(--fg-soft);
+		font-size: 1.05rem;
+	}
+	/* Search + chips need JavaScript, so they only appear when it runs. */
+	.controls {
+		display: none;
+		margin-top: 1.5rem;
+	}
+	:global(html.js) .controls {
+		display: block;
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.15rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--tile-strong);
+		color: var(--muted);
+	}
+	.search:focus-within {
+		border-color: var(--accent);
+		box-shadow: var(--glow);
+	}
+	.search input {
+		flex: 1;
+		min-width: 0;
+		padding: 0.6rem 0;
+		border: 0;
+		background: transparent;
+		color: var(--fg);
+		font: inherit;
+		font-size: 1rem;
+	}
+	.search input:focus {
+		outline: none;
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		margin-top: 0.9rem;
+	}
+	.n {
+		opacity: 0.6;
+	}
+	.status {
+		min-height: 1.2em;
+		margin: 1.25rem 0 0.75rem 0.25rem;
+	}
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+		gap: 1rem;
+	}
+	.empty p:last-child,
+	p.empty {
+		margin: 0;
+		color: var(--fg-soft);
+	}
+</style>
+
+<script>
+	const input = document.getElementById('log-q') as HTMLInputElement | null;
+	const chips = [...document.querySelectorAll<HTMLButtonElement>('.chips .chip')];
+	const cards = [...document.querySelectorAll<HTMLElement>('.cards .card')];
+	const status = document.getElementById('log-status');
+	const none = document.getElementById('log-none');
+
+	if (input && cards.length) {
+		const params = new URLSearchParams(location.search);
+		let topic = params.get('topic') ?? '';
+		input.value = params.get('q') ?? '';
+
+		function apply() {
+			const terms = input!.value.toLowerCase().split(/\s+/).filter(Boolean);
+			let shown = 0;
+			for (const card of cards) {
+				const topicOk = !topic || (card.dataset.topics ?? '').split(' ').includes(topic);
+				const text = card.dataset.search ?? '';
+				const ok = topicOk && terms.every((t) => text.includes(t));
+				card.hidden = !ok;
+				if (ok) shown++;
+			}
+			chips.forEach((c) => c.setAttribute('aria-pressed', String((c.dataset.topic ?? '') === topic)));
+			if (status) {
+				status.textContent =
+					shown === cards.length ? `${shown} entries` : `Showing ${shown} of ${cards.length} entries`;
+			}
+			if (none) none.hidden = shown > 0;
+
+			const url = new URL(location.href);
+			topic ? url.searchParams.set('topic', topic) : url.searchParams.delete('topic');
+			input!.value ? url.searchParams.set('q', input!.value) : url.searchParams.delete('q');
+			history.replaceState(null, '', url);
+		}
+
+		chips.forEach((chip) =>
+			chip.addEventListener('click', () => {
+				topic = chip.dataset.topic ?? '';
+				apply();
+			}),
+		);
+		input.addEventListener('input', apply);
+		// Ignore unknown topics from old links.
+		if (topic && !chips.some((c) => c.dataset.topic === topic)) topic = '';
+		apply();
+	}
+</script>

@@ -1,0 +1,76 @@
+---
+import BaseHead, { type Props as HeadProps } from '../components/BaseHead.astro';
+import Dock from '../components/Dock.astro';
+import SynthBackground from '../components/SynthBackground.astro';
+import TopBar from '../components/TopBar.astro';
+import { SITE } from '../config';
+
+type Props = HeadProps & {
+	/** Content width: 'wide' for tile grids, 'narrow' for reading pages. */
+	width?: 'wide' | 'narrow';
+};
+
+const { width = 'wide', ...head } = Astro.props;
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang={SITE.lang}>
+	<head>
+		<BaseHead {...head} />
+		<slot name="head" />
+	</head>
+	<body>
+		<SynthBackground />
+		<a class="skip-link" href="#content">Skip to content</a>
+		<TopBar />
+		<main id="content" class={width}>
+			<slot />
+		</main>
+		<footer class="foot">
+			<p>&copy; {year} {SITE.author} · {SITE.title}</p>
+		</footer>
+		<Dock />
+	</body>
+</html>
+
+<style>
+	main {
+		margin: 0 auto;
+		padding: 2rem 1.25rem 2rem;
+	}
+	main.wide {
+		max-width: var(--wide);
+	}
+	main.narrow {
+		max-width: var(--narrow);
+	}
+	.foot {
+		padding: 0 1.25rem calc(var(--dock-h) + 2.5rem);
+		text-align: center;
+	}
+	.foot p {
+		display: inline-block;
+		margin: 0;
+		padding: 0.3rem 0.9rem;
+		border-radius: 999px;
+		background: var(--tile);
+		color: var(--muted);
+		font: 0.72rem var(--font-mono);
+		-webkit-backdrop-filter: var(--blur);
+		backdrop-filter: var(--blur);
+	}
+	.skip-link {
+		position: fixed;
+		top: 0.5rem;
+		left: 0.5rem;
+		z-index: 100;
+		padding: 0.5rem 1rem;
+		border-radius: 999px;
+		background: var(--tile-strong);
+		transform: translateY(-200%);
+	}
+	.skip-link:focus {
+		transform: none;
+	}
+</style>

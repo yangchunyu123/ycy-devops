@@ -1,0 +1,70 @@
+---
+import Icon from './Icon.astro';
+---
+
+<button id="theme-toggle" class="theme-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+	<span class="sun"><Icon name="sun" size={18} /></span>
+	<span class="moon"><Icon name="moon" size={18} /></span>
+</button>
+
+<style>
+	.theme-btn {
+		display: grid;
+		place-items: center;
+		width: 2.6rem;
+		height: 2.6rem;
+		border: 1px solid var(--tile-border);
+		border-radius: 50%;
+		background: var(--tile);
+		-webkit-backdrop-filter: var(--blur);
+		backdrop-filter: var(--blur);
+		color: var(--fg);
+		cursor: pointer;
+		transition:
+			transform 0.3s ease,
+			box-shadow 0.2s ease;
+	}
+	.theme-btn:hover {
+		box-shadow: var(--glow);
+		transform: rotate(-20deg);
+	}
+	.sun,
+	.moon {
+		display: grid;
+		grid-area: 1 / 1;
+	}
+	.moon {
+		display: none;
+	}
+	:global(:root[data-theme='dark']) .sun {
+		display: none;
+	}
+	:global(:root[data-theme='dark']) .moon {
+		display: grid;
+		color: var(--accent-3);
+	}
+</style>
+
+<script>
+	const root = document.documentElement;
+	const button = document.getElementById('theme-toggle')!;
+
+	button.addEventListener('click', () => {
+		const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+		root.setAttribute('data-theme', next);
+		try {
+			localStorage.setItem('theme', next);
+		} catch {
+			/* storage unavailable: theme still applies for this page */
+		}
+	});
+
+	// Follow OS changes until the visitor picks a theme explicitly.
+	window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+		let stored: string | null = null;
+		try {
+			stored = localStorage.getItem('theme');
+		} catch {}
+		if (!stored) root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+	});
+</script>

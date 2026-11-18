@@ -1,0 +1,393 @@
+---
+/**
+ * Full-screen animated "synthwave sunset" background:
+ *  - sky gradient with stars (dark theme),
+ *  - a large striped sun sinking behind two layers of mountains,
+ *  - a neon perspective grid floor that endlessly rolls toward the viewer,
+ *  - the whole scene pans gently with the mouse (parallax).
+ *
+ * Theme-aware, pauses while the tab is hidden, renders one still frame for visitors who prefer
+ * reduced motion, and falls back to a static CSS gradient without JavaScript.
+ */
+---
+
+<div class="bg" aria-hidden="true">
+	<canvas class="bg-canvas"></canvas>
+	<div class="bg-scanlines"></div>
+	<div class="bg-grain"></div>
+</div>
+
+<style>
+	.bg {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100vh;
+		height: 100lvh;
+		z-index: -1;
+		pointer-events: none;
+		overflow: hidden;
+		/* Static fallback: sky over a floor. */
+		background: linear-gradient(
+			to bottom,
+			var(--sky-top) 0%,
+			var(--sky-mid) 40%,
+			var(--sky-horizon) 58%,
+			var(--floor) 58%,
+			var(--floor) 100%
+		);
+	}
+	canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		transition: opacity 1s ease;
+	}
+	canvas.ready {
+		opacity: 1;
+	}
+	/* CRT-style scanlines (visible in dark mode only). */
+	.bg-scanlines {
+		position: absolute;
+		inset: 0;
+		opacity: var(--scanline-opacity);
+		background: repeating-linear-gradient(to bottom, #000 0 1px, transparent 1px 3px);
+	}
+	.bg-grain {
+		position: absolute;
+		inset: 0;
+		opacity: var(--grain-opacity);
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	}
+</style>
+
+<script>
+	type Palette = {
+		sky: [string, string, string]; // top, middle, horizon
+		sun: [string, string]; // top, bottom
+		sunGlow: string; // "r,g,b"
+		mountains: [string, string]; // far, near
+		ridge: string; // "r,g,b" rim light on mountain tops
+		ridgeAlpha: number;
+		floor: [string, string]; // at horizon, at bottom
+		grid: string; // "r,g,b"
+		gridAlpha: number;
+		horizon: string; // "r,g,b" glowing horizon line
+		stars: boolean;
+	};
+
+	const PALETTES: Record<'light' | 'dark', Palette> = {
+		dark: {
+			sky: ['#0b0221', '#2d0a4e', '#a2186d'],
+			sun: ['#ffe66d', '#ff2e97'],
+			sunGlow: '255,46,151',
+			mountains: ['#2a0a4a', '#14042b'],
+			ridge: '255,62,165',
+			ridgeAlpha: 0.7,
+			floor: ['#1d0640', '#06010f'],
+			grid: '255,62,165',
+			gridAlpha: 0.8,
+			horizon: '34,228,255',
+			stars: true,
+		},
+		light: {
+			sky: ['#c9b8ff', '#f6c4ea', '#ffd9b3'],
+			sun: ['#fff1a8', '#ff8fc7'],
+			sunGlow: '255,150,200',
+			mountains: ['#c3adf5', '#a58be6'],
+			ridge: '255,255,255',
+			ridgeAlpha: 0.8,
+			floor: ['#f1e4ff', '#dcc8ff'],
+			grid: '150,80,220',
+			gridAlpha: 0.55,
+			horizon: '255,255,255',
+			stars: false,
+		},
+	};
+
+	const root = document.documentElement;
+	const container = document.querySelector<HTMLElement>('.bg')!;
+	const canvas = document.querySelector<HTMLCanvasElement>('.bg-canvas')!;
+	const ctx = canvas.getContext('2d')!;
+	const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+	let palette = PALETTES[root.dataset.theme === 'dark' ? 'dark' : 'light'];
+	let width = 0;
+	let height = 0;
+	let dpr = 1;
+	let horizon = 0;
+	let rafId = 0;
+	let lastTime = 0;
+	let clock = 0;
+	let pan = 0; // current horizontal camera offset (px)
+	let panTarget = 0;
+
+	type Star = { x: number; y: number; r: number; tw: number; sp: number };
+	let stars: Star[] = [];
+	let ridges: [number[], number[]] = [[], []]; // mountain heights 0..1, far and near
+
+	const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+	/** Jagged, repeatable mountain profile using midpoint displacement. */
+	function makeRidge(points: number, roughness: number): number[] {
+		const h = new Array(points + 1).fill(0);
+		h[0] = h[points] = rand(0.2, 0.5);
+		let step = points;
+		let scale = 1;
+		while (step > 1) {
+			const half = step / 2;
+			for (let i = half; i < points; i += step) {
+				h[i] = (h[i - half] + h[i + half]) / 2 + rand(-0.5, 0.5) * scale;
+			}
+			step = half;
+			scale *= roughness;
+		}
+		const min = Math.min(...h);
+		const max = Math.max(...h);
+		return h.map((v) => (v - min) / (max - min || 1));
+	}
+
+	function seed() {
+		stars = Array.from({ length: Math.min(220, Math.round((width * horizon) / 4500)) }, () => ({
+			x: Math.random() * width,
+			y: Math.pow(Math.random(), 1.3) * horizon * 0.85,
+			r: Math.random() < 0.1 ? rand(1.1, 1.6) : rand(0.4, 1),
+			tw: rand(0, Math.PI * 2),
+			sp: rand(0.6, 2),
+		}));
+		ridges = [makeRidge(64, 0.55), makeRidge(64, 0.6)];
+	}
+
+	function resize(): boolean {
+		const w = container.clientWidth;
+		const h = container.clientHeight;
+		const ratio = Math.min(window.devicePixelRatio || 1, 2);
+		if (w === width && h === height && ratio === dpr) return false;
+		const widthChanged = w !== width;
+		width = w;
+		height = h;
+		dpr = ratio;
+		horizon = Math.round(height * (width < height ? 0.62 : 0.58));
+		canvas.width = Math.round(width * dpr);
+		canvas.height = Math.round(height * dpr);
+		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		if (widthChanged || stars.length === 0) seed();
+		return true;
+	}
+
+	// ---------- Drawing ----------
+	function skyGradient() {
+		const g = ctx.createLinearGradient(0, 0, 0, horizon);
+		g.addColorStop(0, palette.sky[0]);
+		g.addColorStop(0.55, palette.sky[1]);
+		g.addColorStop(1, palette.sky[2]);
+		return g;
+	}
+
+	function drawSky(t: number) {
+		const sky = skyGradient();
+		ctx.fillStyle = sky;
+		ctx.fillRect(0, 0, width, horizon + 1);
+
+		if (palette.stars) {
+			for (const s of stars) {
+				const a = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(t * s.sp + s.tw));
+				ctx.fillStyle = `rgba(255,236,255,${a})`;
+				ctx.fillRect(s.x - pan * 0.05, s.y, s.r * 1.6, s.r * 1.6);
+			}
+		}
+
+		// Sun: glow, disc with vertical gradient, and horizontal "blinds" that drift upward.
+		const r = Math.min(240, Math.max(90, Math.min(width, height) * 0.24));
+		const cx = width * 0.5 - pan * 0.2;
+		const cy = horizon - r * 0.32;
+
+		const glow = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 2.6);
+		glow.addColorStop(0, `rgba(${palette.sunGlow},0.45)`);
+		glow.addColorStop(1, `rgba(${palette.sunGlow},0)`);
+		ctx.fillStyle = glow;
+		ctx.fillRect(cx - r * 2.6, cy - r * 2.6, r * 5.2, r * 5.2);
+
+		const disc = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+		disc.addColorStop(0, palette.sun[0]);
+		disc.addColorStop(1, palette.sun[1]);
+		ctx.fillStyle = disc;
+		ctx.beginPath();
+		ctx.arc(cx, cy, r, 0, Math.PI * 2);
+		ctx.fill();
+
+		// Stripes are painted with the sky gradient, so they look like gaps in the sun.
+		const spacing = r * 0.16;
+		const offset = (t * r * 0.04) % spacing;
+		ctx.fillStyle = sky;
+		for (let y = cy + r - offset; y > cy - r * 0.05; y -= spacing) {
+			const depth = (y - (cy - r * 0.05)) / (r * 1.05); // 0 at top of stripe zone, 1 at bottom
+			const thick = r * (0.012 + 0.075 * depth);
+			ctx.fillRect(cx - r - 2, y - thick / 2, r * 2 + 4, thick);
+		}
+	}
+
+	function drawMountains() {
+		const layers = [
+			{ h: ridges[0], color: palette.mountains[0], height: 0.22, factor: 0.25, span: 1.6 },
+			{ h: ridges[1], color: palette.mountains[1], height: 0.13, factor: 0.45, span: 1.3 },
+		];
+		for (const L of layers) {
+			const maxH = horizon * L.height;
+			const segW = (width * L.span) / (L.h.length - 1);
+			const x0 = -width * ((L.span - 1) / 2) - pan * L.factor;
+			ctx.beginPath();
+			ctx.moveTo(x0, horizon + 1);
+			L.h.forEach((v, i) => ctx.lineTo(x0 + i * segW, horizon - v * maxH));
+			ctx.lineTo(x0 + (L.h.length - 1) * segW, horizon + 1);
+			ctx.closePath();
+			ctx.fillStyle = L.color;
+			ctx.fill();
+			// Rim light along the ridge.
+			ctx.beginPath();
+			L.h.forEach((v, i) => {
+				const x = x0 + i * segW;
+				const y = horizon - v * maxH;
+				i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+			});
+			ctx.strokeStyle = `rgba(${palette.ridge},${palette.ridgeAlpha * 0.6})`;
+			ctx.lineWidth = 1.2;
+			ctx.stroke();
+		}
+	}
+
+	function drawFloor(t: number) {
+		const floorH = height - horizon;
+		const g = ctx.createLinearGradient(0, horizon, 0, height);
+		g.addColorStop(0, palette.floor[0]);
+		g.addColorStop(1, palette.floor[1]);
+		ctx.fillStyle = g;
+		ctx.fillRect(0, horizon, width, floorH);
+
+		const vx = width * 0.5 - pan; // vanishing point
+		const fade = ctx.createLinearGradient(0, horizon, 0, height);
+		fade.addColorStop(0, `rgba(${palette.grid},0)`);
+		fade.addColorStop(0.25, `rgba(${palette.grid},${palette.gridAlpha * 0.6})`);
+		fade.addColorStop(1, `rgba(${palette.grid},${palette.gridAlpha})`);
+
+		// Lines are drawn twice: a wide faint pass (glow) and a thin bright pass.
+		const passes = [
+			{ w: 5, a: 0.18 },
+			{ w: 1.3, a: 1 },
+		];
+
+		// Vertical lines converge at the vanishing point.
+		const spread = Math.max(70, width * 0.085);
+		const count = Math.ceil((width * 1.5) / spread);
+		for (const p of passes) {
+			ctx.globalAlpha = p.a;
+			ctx.strokeStyle = fade;
+			ctx.lineWidth = p.w;
+			ctx.beginPath();
+			for (let i = -count; i <= count; i++) {
+				ctx.moveTo(vx, horizon);
+				ctx.lineTo(vx + i * spread * 2.2, height + floorH * 0.2);
+			}
+			ctx.stroke();
+		}
+
+		// Horizontal lines scroll toward the viewer (perspective: y = horizon + k / z).
+		const phase = (t * 0.9) % 1;
+		const k = floorH * 0.9;
+		for (const p of passes) {
+			ctx.lineWidth = p.w;
+			ctx.beginPath();
+			for (let n = 0; n < 40; n++) {
+				const z = n + 1 - phase;
+				if (z <= 0.15) continue;
+				const y = horizon + k / z;
+				if (y > height + 4) continue;
+				const nearness = Math.min(1, (y - horizon) / (floorH * 0.35));
+				if (nearness < 0.03) break;
+				ctx.globalAlpha = p.a * nearness;
+				ctx.strokeStyle = `rgba(${palette.grid},${palette.gridAlpha})`;
+				ctx.beginPath();
+				ctx.moveTo(0, y);
+				ctx.lineTo(width, y);
+				ctx.stroke();
+			}
+		}
+		ctx.globalAlpha = 1;
+
+		// Glowing horizon line + haze.
+		const haze = ctx.createLinearGradient(0, horizon - 30, 0, horizon + 40);
+		haze.addColorStop(0, `rgba(${palette.horizon},0)`);
+		haze.addColorStop(0.45, `rgba(${palette.horizon},0.22)`);
+		haze.addColorStop(1, `rgba(${palette.horizon},0)`);
+		ctx.fillStyle = haze;
+		ctx.fillRect(0, horizon - 30, width, 70);
+		ctx.fillStyle = `rgba(${palette.horizon},0.9)`;
+		ctx.fillRect(0, horizon, width, 1.5);
+	}
+
+	function render() {
+		drawSky(clock);
+		drawMountains();
+		drawFloor(clock);
+	}
+
+	// ---------- Animation ----------
+	function frame(now: number) {
+		const dt = Math.min((now - lastTime) / 1000, 0.05);
+		lastTime = now;
+		clock += dt;
+		pan += (panTarget - pan) * Math.min(1, dt * 2.5);
+		render();
+		rafId = requestAnimationFrame(frame);
+	}
+
+	function start() {
+		if (rafId || reducedMotion.matches || document.hidden) return;
+		lastTime = performance.now();
+		rafId = requestAnimationFrame(frame);
+	}
+
+	function stop() {
+		cancelAnimationFrame(rafId);
+		rafId = 0;
+	}
+
+	let resizeTimer: number | undefined;
+	window.addEventListener('resize', () => {
+		clearTimeout(resizeTimer);
+		resizeTimer = window.setTimeout(() => {
+			if (resize()) render();
+		}, 150);
+	});
+
+	window.addEventListener(
+		'pointermove',
+		(e) => {
+			if (e.pointerType !== 'mouse') return;
+			panTarget = (e.clientX / width - 0.5) * width * 0.12;
+		},
+		{ passive: true },
+	);
+	root.addEventListener('pointerleave', () => (panTarget = 0));
+	document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+	reducedMotion.addEventListener('change', () => {
+		if (reducedMotion.matches) {
+			stop();
+			render();
+		} else start();
+	});
+
+	new MutationObserver(() => {
+		palette = PALETTES[root.dataset.theme === 'dark' ? 'dark' : 'light'];
+		if (!rafId) render();
+	}).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
+	resize();
+	clock = rand(0, 30);
+	render();
+	canvas.classList.add('ready');
+	start();
+</script>

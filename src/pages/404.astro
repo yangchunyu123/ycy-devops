@@ -1,0 +1,90 @@
+---
+import Icon from '../components/Icon.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Signal lost" width="narrow" noindex>
+	<section class="tile box pop">
+		<p class="glitch display" data-text="404">404</p>
+		<h1 class="display title">Signal lost</h1>
+		<p class="text">This page is out of range — it moved, or it never existed.</p>
+		<p class="actions">
+			<a class="btn" href="/"><Icon name="home" size={16} /> Back to home</a>
+			<a class="btn ghost" href="/log/">Open the log</a>
+		</p>
+	</section>
+</BaseLayout>
+
+<style>
+	.box {
+		margin-top: 2rem;
+		padding: 3rem 2rem;
+		text-align: center;
+	}
+	/* Glitchy 404: two offset copies in pink and cyan that jitter. */
+	.glitch {
+		position: relative;
+		display: inline-block;
+		font-size: clamp(5rem, 22vw, 9rem);
+		color: var(--fg);
+	}
+	.glitch::before,
+	.glitch::after {
+		content: attr(data-text);
+		position: absolute;
+		inset: 0;
+		mix-blend-mode: screen;
+	}
+	.glitch::before {
+		color: #ff3ea5;
+		animation: glitch 2.4s infinite steps(1);
+	}
+	.glitch::after {
+		color: #22e4ff;
+		animation: glitch 2.4s infinite steps(1) reverse;
+	}
+	:global(:root:not([data-theme='dark'])) .glitch::before,
+	:global(:root:not([data-theme='dark'])) .glitch::after {
+		mix-blend-mode: multiply;
+		opacity: 0.7;
+	}
+	@keyframes glitch {
+		0%,
+		100% {
+			transform: translate(0);
+			clip-path: inset(0 0 0 0);
+		}
+		20% {
+			transform: translate(-4px, 2px);
+			clip-path: inset(10% 0 60% 0);
+		}
+		40% {
+			transform: translate(4px, -2px);
+			clip-path: inset(50% 0 20% 0);
+		}
+		60% {
+			transform: translate(-2px, 0);
+			clip-path: inset(30% 0 40% 0);
+		}
+		80% {
+			transform: translate(3px, 1px);
+			clip-path: inset(70% 0 5% 0);
+		}
+	}
+	.title {
+		margin-top: 0.5rem;
+		font-size: clamp(1.8rem, 6vw, 2.6rem);
+	}
+	.text {
+		margin: 1rem auto 2rem;
+		max-width: 26rem;
+		color: var(--fg-soft);
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.75rem;
+		margin: 0;
+	}
+</style>

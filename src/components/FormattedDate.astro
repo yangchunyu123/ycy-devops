@@ -1,0 +1,11 @@
+---
+interface Props {
+	date: Date;
+}
+
+const { date } = Astro.props;
+// Frontmatter dates are UTC midnight; format from the ISO string so the day never shifts.
+const label = date.toISOString().slice(0, 10).replaceAll('-', '.');
+---
+
+<time datetime={date.toISOString()}>{label}</time>

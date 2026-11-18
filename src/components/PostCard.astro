@@ -1,0 +1,94 @@
+---
+import { type Post, postUrl, readingTime, stripMarkdown, tagSlug } from '../utils/posts';
+import FormattedDate from './FormattedDate.astro';
+
+interface Props {
+	post: Post;
+	index?: number;
+}
+
+const { post, index = 0 } = Astro.props;
+const { title, description, pubDate, tags, draft } = post.data;
+// Data used by the client-side search / topic filter on /log/.
+const searchText = [title, description, tags.join(' '), stripMarkdown(post.body).slice(0, 3000)]
+	.join(' ')
+	.toLowerCase();
+---
+
+<article
+	class="tile hoverable card pop"
+	style={`--i: ${index}`}
+	data-topics={tags.map(tagSlug).join(' ')}
+	data-search={searchText}
+>
+	<p class="label meta">
+		<FormattedDate date={pubDate} />
+		<span>· {readingTime(post.body)} min</span>
+		{draft && <span class="draft">draft</span>}
+	</p>
+	<h3 class="title">
+		<a href={postUrl(post)}>{title}</a>
+	</h3>
+	<p class="desc">{description}</p>
+	{
+		tags.length > 0 && (
+			<p class="topics">
+				{tags.map((tag) => (
+					<a class="chip" href={`/log/?topic=${encodeURIComponent(tagSlug(tag))}`}>
+						#{tag}
+					</a>
+				))}
+			</p>
+		)
+	}
+</article>
+
+<style>
+	.card {
+		display: flex;
+		flex-direction: column;
+	}
+	.meta {
+		display: flex;
+		gap: 0.4rem;
+		margin-bottom: 0.6rem;
+	}
+	.draft {
+		color: var(--accent-3);
+	}
+	.title {
+		margin: 0 0 0.5rem;
+		font-size: 1.3rem;
+		font-weight: 800;
+	}
+	.title a {
+		color: var(--fg);
+		text-decoration: none;
+	}
+	/* Make the whole card clickable. */
+	.title a::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+	}
+	.card:hover .title a {
+		color: var(--accent);
+	}
+	.desc {
+		margin: 0 0 1rem;
+		color: var(--fg-soft);
+		font-size: 0.97rem;
+	}
+	.topics {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: auto 0 0;
+	}
+	/* Topic chips stay clickable above the card-wide link. */
+	.topics .chip {
+		position: relative;
+		z-index: 1;
+	}
+</style>

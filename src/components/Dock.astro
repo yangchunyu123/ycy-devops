@@ -1,0 +1,78 @@
+---
+/** Floating navigation dock fixed at the bottom of the screen (all screen sizes). */
+import { NAV_LINKS } from '../config';
+import Icon from './Icon.astro';
+
+const path = Astro.url.pathname;
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<nav class="dock" aria-label="Main">
+	<ul>
+		{
+			NAV_LINKS.map((link) => (
+				<li>
+					<a href={link.href} aria-current={isActive(link.href) ? 'page' : undefined}>
+						<Icon name={link.icon} size={20} />
+						<span>{link.label}</span>
+					</a>
+				</li>
+			))
+		}
+	</ul>
+</nav>
+
+<style>
+	.dock {
+		position: fixed;
+		left: 50%;
+		bottom: max(1rem, env(safe-area-inset-bottom));
+		z-index: 30;
+		transform: translateX(-50%);
+		padding: 0.4rem;
+		border: 1px solid var(--tile-border);
+		border-radius: 999px;
+		background: var(--tile-strong);
+		-webkit-backdrop-filter: var(--blur);
+		backdrop-filter: var(--blur);
+		box-shadow: var(--shadow);
+	}
+	ul {
+		display: flex;
+		gap: 0.25rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	a {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.65rem 1.15rem;
+		border-radius: 999px;
+		color: var(--fg-soft);
+		font-weight: 700;
+		font-size: 0.9rem;
+		text-decoration: none;
+		transition:
+			background-color 0.2s ease,
+			color 0.2s ease;
+	}
+	a:hover {
+		background: var(--accent-soft);
+		color: var(--fg);
+	}
+	a[aria-current='page'] {
+		background: var(--grad);
+		color: #fff;
+		box-shadow: 0 6px 20px rgba(255, 62, 165, 0.35);
+	}
+	@media (max-width: 480px) {
+		a {
+			flex-direction: column;
+			gap: 0.15rem;
+			padding: 0.45rem 1.1rem;
+			font-size: 0.68rem;
+		}
+	}
+</style>

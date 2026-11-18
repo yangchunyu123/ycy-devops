@@ -1,0 +1,364 @@
+---
+import FormattedDate from '../components/FormattedDate.astro';
+import Icon from '../components/Icon.astro';
+import { SITE, SOCIAL_LINKS } from '../config';
+import { PROFILE } from '../data/profile';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getPosts, getTags, postUrl } from '../utils/posts';
+
+const posts = await getPosts();
+const latest = posts.slice(0, 3);
+const topicCount = getTags(posts).length;
+const initials = PROFILE.name
+	.split(/\s+/)
+	.filter(Boolean)
+	.slice(0, 2)
+	.map((w) => [...w][0])
+	.join('')
+	.toUpperCase();
+---
+
+<BaseLayout description={PROFILE.intro[0] ?? PROFILE.role}>
+	<div class="bento">
+		<!-- Profile -->
+		<section class="tile profile pop" style="--i: 0">
+			<div class="avatar">
+				{PROFILE.avatar ? <img src={PROFILE.avatar} alt={PROFILE.name} width="96" height="96" /> : initials}
+			</div>
+			<p class="label">Hello, I'm</p>
+			<h1 class="display name gradient-text">{PROFILE.name}</h1>
+			<p class="role">{PROFILE.role}</p>
+			{
+				PROFILE.location && (
+					<p class="location">
+						<Icon name="pin" size={15} /> {PROFILE.location}
+					</p>
+				)
+			}
+			{
+				PROFILE.intro.length > 0 && (
+					<div class="intro">
+						{PROFILE.intro.map((p) => (
+							<p>{p}</p>
+						))}
+					</div>
+				)
+			}
+			<div class="actions">
+				<a class="btn" href="/log/">Open the log <Icon name="arrow" size={16} /></a>
+				<a class="btn ghost" href="/about/">About</a>
+				{
+					SOCIAL_LINKS.map((link) => (
+						<a class="btn ghost icon" href={link.href} aria-label={link.label} title={link.label}>
+							<Icon name={link.icon} size={18} />
+						</a>
+					))
+				}
+			</div>
+		</section>
+
+		<!-- Live clock -->
+		<section class="tile clock pop" style="--i: 1">
+			<p class="label"><Icon name="clock" size={13} /> Your local time</p>
+			<p class="time" id="clock-time">--:--:--</p>
+			<p class="date muted" id="clock-date">&nbsp;</p>
+		</section>
+
+		<!-- Stats -->
+		<section class="tile stats pop" style="--i: 2">
+			<p class="label"><Icon name="chart" size={13} /> Stats</p>
+			<dl>
+				<div><dt>Entries</dt><dd>{posts.length}</dd></div>
+				<div><dt>Topics</dt><dd>{topicCount}</dd></div>
+				<div><dt>Interests</dt><dd>{PROFILE.hobbies.length}</dd></div>
+			</dl>
+		</section>
+
+		<!-- Latest log entries -->
+		<section class="tile latest pop" style="--i: 3">
+			<p class="label"><Icon name="log" size={13} /> Latest from the log</p>
+			{
+				latest.length > 0 ? (
+					<ul>
+						{latest.map((post) => (
+							<li>
+								<span class="d">
+									<FormattedDate date={post.data.pubDate} />
+								</span>
+								<a href={postUrl(post)}>{post.data.title}</a>
+							</li>
+						))}
+					</ul>
+				) : (
+					<p class="empty">No entries yet — the first one is loading…</p>
+				)
+			}
+			<a class="more" href="/log/">View all <Icon name="arrow" size={14} /></a>
+		</section>
+	</div>
+
+	<h2 class="label section">Interests</h2>
+	<ul class="hobbies">
+		{
+			PROFILE.hobbies.map((h, i) => (
+				<li class="tile hoverable pop" style={`--i: ${i + 4}`}>
+					<span class="h-icon">
+						<Icon name={h.icon} size={22} />
+					</span>
+					<h3>{h.title}</h3>
+					<p>{h.text}</p>
+				</li>
+			))
+		}
+	</ul>
+</BaseLayout>
+
+<style>
+	/* ---------- Bento grid ---------- */
+	.bento {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-areas:
+			'profile profile clock stats'
+			'profile profile latest latest';
+		gap: 1rem;
+	}
+	.profile {
+		grid-area: profile;
+		padding: 2rem;
+	}
+	.clock {
+		grid-area: clock;
+	}
+	.stats {
+		grid-area: stats;
+	}
+	.latest {
+		grid-area: latest;
+	}
+	.label {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	/* Profile */
+	.avatar {
+		display: grid;
+		place-items: center;
+		width: 5.5rem;
+		height: 5.5rem;
+		margin-bottom: 1.5rem;
+		overflow: hidden;
+		border-radius: 28px;
+		background: var(--grad);
+		box-shadow: 0 10px 30px rgba(255, 62, 165, 0.35);
+		color: #fff;
+		font: 900 1.8rem var(--font-mono);
+		transform: rotate(-4deg);
+	}
+	.avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.name {
+		font-size: clamp(2.4rem, 6vw, 4.25rem);
+		overflow-wrap: anywhere;
+	}
+	.role {
+		margin: 0.9rem 0 0;
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: var(--fg-soft);
+	}
+	.location {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0.5rem 0 0;
+		color: var(--muted);
+		font-size: 0.92rem;
+	}
+	.intro {
+		margin-top: 1rem;
+		color: var(--fg-soft);
+	}
+	.intro p {
+		margin: 0 0 0.5rem;
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+		margin-top: 1.75rem;
+	}
+	.btn.icon {
+		padding: 0.7rem 0.8rem;
+	}
+
+	/* Clock */
+	.time {
+		margin: 0.4rem 0 0.2rem;
+		font: 800 clamp(1.8rem, 3.2vw, 2.4rem) / 1 var(--font-mono);
+		letter-spacing: -0.02em;
+		color: var(--fg);
+		text-shadow: var(--neon-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.date {
+		margin: 0;
+		font-size: 0.88rem;
+	}
+
+	/* Stats */
+	dl {
+		display: grid;
+		gap: 0.4rem;
+		margin: 0;
+	}
+	dl div {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		padding-bottom: 0.35rem;
+		border-bottom: 1px dashed var(--border);
+	}
+	dt {
+		color: var(--fg-soft);
+		font-size: 0.9rem;
+	}
+	dd {
+		margin: 0;
+		font: 800 1.35rem var(--font-mono);
+		color: var(--accent);
+	}
+
+	/* Latest */
+	.latest ul {
+		list-style: none;
+		margin: 0 0 0.75rem;
+		padding: 0;
+	}
+	.latest li {
+		display: flex;
+		gap: 0.9rem;
+		align-items: baseline;
+		padding: 0.45rem 0;
+		border-bottom: 1px dashed var(--border);
+	}
+	.latest .d {
+		flex: none;
+		font: 0.75rem var(--font-mono);
+		color: var(--muted);
+	}
+	.latest li a {
+		color: var(--fg);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.latest li a:hover {
+		color: var(--accent);
+	}
+	.empty {
+		margin: 0 0 0.75rem;
+		color: var(--muted);
+	}
+	.more {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font: 700 0.8rem var(--font-mono);
+		text-decoration: none;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	/* ---------- Interests ---------- */
+	.section {
+		margin: 3rem 0 1rem;
+		padding-left: 0.25rem;
+		color: var(--fg);
+		text-shadow: var(--neon-text);
+	}
+	.hobbies {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+		gap: 1rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.h-icon {
+		display: inline-grid;
+		place-items: center;
+		width: 2.9rem;
+		height: 2.9rem;
+		margin-bottom: 1rem;
+		border-radius: 50%;
+		background: var(--grad);
+		color: #fff;
+		box-shadow: 0 6px 18px rgba(168, 85, 247, 0.35);
+	}
+	.hobbies li:hover .h-icon {
+		animation: wobble 0.5s ease;
+	}
+	.hobbies h3 {
+		margin: 0 0 0.3rem;
+		font-size: 1.1rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.hobbies p {
+		margin: 0;
+		font-size: 0.93rem;
+		color: var(--fg-soft);
+	}
+	@keyframes wobble {
+		30% {
+			transform: rotate(-12deg) scale(1.08);
+		}
+		60% {
+			transform: rotate(8deg);
+		}
+	}
+
+	/* ---------- Responsive ---------- */
+	@media (max-width: 960px) {
+		.bento {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			grid-template-areas:
+				'profile profile'
+				'clock stats'
+				'latest latest';
+		}
+	}
+	@media (max-width: 560px) {
+		.bento {
+			grid-template-columns: 1fr;
+			grid-template-areas: 'profile' 'clock' 'stats' 'latest';
+		}
+		.profile {
+			padding: 1.5rem;
+		}
+	}
+</style>
+
+<script>
+	// Live clock in the visitor's own time zone.
+	const timeEl = document.getElementById('clock-time')!;
+	const dateEl = document.getElementById('clock-date')!;
+	function tick() {
+		const now = new Date();
+		timeEl.textContent = now.toLocaleTimeString([], {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: false,
+		});
+		dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+	}
+	tick();
+	setInterval(tick, 1000);
+</script>
