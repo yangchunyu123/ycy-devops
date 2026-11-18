@@ -1,11 +1,5 @@
 # ycy-devops — Personal Blog
 
-A fast, static personal website and blog built with [Astro](https://astro.build), with a retro
-**synthwave** look. The home page is a "bento" grid of tiles (profile, live clock, stats, latest
-entries, interests) on top of an animated neon sunset; the **Log** turns Markdown files into
-searchable, filterable entries. Everything is pre-rendered into plain HTML/CSS/JS in `dist/` and
-served by Nginx — no Node.js needed on the server.
-
 ## Table of contents
 
 - [Project overview](#project-overview)
@@ -113,7 +107,7 @@ Generated (git-ignored): `node_modules/`, `.astro/`, `dist/` (build output), `re
 
 ```bash
 npm install
-npm run dev          # http://localhost:4321 — live reload, drafts visible
+npm run dev          
 ```
 
 | Command                    | What it does                                                    |
@@ -122,7 +116,7 @@ npm run dev          # http://localhost:4321 — live reload, drafts visible
 | `npm run new -- "Title"`   | Create `src/content/posts/title.md` as a draft                  |
 | `npm run check`            | Type-check components and validate entry frontmatter            |
 | `npm run build`            | Build the static site into `dist/`                              |
-| `npm run preview`          | Serve `dist/` locally (http://localhost:4321) to double-check   |
+| `npm run preview`          | Serve `dist/` locally to double-check   |
 | `npm run package`          | check + build + create `release/blog-dist-<timestamp>.tar.gz`   |
 | `npm run standalone`       | build + write `./index.html`: the home page as one self-contained file that opens directly in a browser |
 
@@ -189,17 +183,3 @@ sudo ln -s /etc/nginx/sites-available/blog.conf /etc/nginx/sites-enabled/blog.co
 
 sudo nginx -t && sudo systemctl reload nginx
 ```
-
-What the config does:
-
-| Concern        | Behavior                                                                          |
-| -------------- | --------------------------------------------------------------------------------- |
-| Clean URLs     | `try_files $uri $uri/ =404` — `/log/foo/` → `log/foo/index.html`; `/log/foo` → 301 to `/log/foo/` (relative redirect via `absolute_redirect off`) |
-| 404            | `error_page 404 /404.html` serves the site's custom page                          |
-| Caching        | `/_astro/*` (fingerprinted) → 1 year `immutable`; images/fonts → 7 days; `rss.xml` → 1 hour; HTML → `no-cache` so new content appears immediately |
-| Compression    | gzip for HTML, CSS, JS, JSON, XML, SVG                                            |
-| Security       | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `server_tokens off`, dotfiles denied |
-| Content types  | `rss.xml` served as `application/rss+xml`                                         |
-
-On a cloud server, also open port 80 (and 443 for HTTPS) in the provider's security group and
-the server firewall.
